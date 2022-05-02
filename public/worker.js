@@ -1,13 +1,15 @@
-let array = [];
-self.addEventListener("message", event => {
-    if (event.data === "download") {
-        const blob = new Blob(array);
-        self.postMessage(blob);
+let fileChunks = [];
+self.addEventListener("message", handleMessage);
+
+function handleMessage(message) {
+    if (message.data === "download") {
+        const fileBlob = new Blob(array);
+        self.postMessage(fileBlob);
         array = [];
-    } else if (event.data === "abort") {
+    } else if (message.data === "abort") {
         array = [];
     } else {
-        array.push(event.data);
-        console.info('[worker] Adding Data', event.data);
+        array.push(message.data);
+        console.info('[worker] Adding Data', message.data);
     }
-})
+}

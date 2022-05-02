@@ -22,7 +22,7 @@
             <div class="container">
                 <div class="card">
                     <div class="card-content">
-                        <span class="card-title">Sleepster: Transfer Files</span>
+                        <span class="card-title">Sleepster: Transfer Files: Room {{ roomId }}</span>
 
                         <div class="section center-align">
                             <div v-if="!connected">
@@ -93,27 +93,36 @@
         },
         watch: {
             connected: function (newConnected) {
-                let vm = this;
-                if (newConnected && vm.fileReceived) {
-                    vm.status = "File Received";
-                } else if (newConnected && !vm.filesReceived) {
-                    vm.status = "Connected";
-                } else {
-                    vm.status = "Connecting...";
-                }
+                return new Promise((resolve) => {
+                    let vm = this;
+                    if (newConnected && vm.fileReceived) {
+                        vm.status = "File Received";
+                    } else if (newConnected && !vm.filesReceived) {
+                        vm.status = "Connected";
+                    } else {
+                        vm.status = "Connecting...";
+                    }
+                    resolve();
+                });
             },
             fileReceived: function (newFileReceived) {
-                let vm = this;
-                if (newFileReceived) {
-                    vm.status = "File Received";
-                }
+                return new Promise((resolve) => {
+                    let vm = this;
+                    if (newFileReceived) {
+                        vm.status = "File Received";
+                    }
+                    resolve();
+                });
             },
             roomId: function (newRoomId) {
-                let vm = this;
-                if (newRoomId !== null) {
-                    vm.initializeSocket();
-                }
-            }
+                return new Promise((resolve) => {
+                    let vm = this;
+                    if (newRoomId !== null) {
+                        vm.initializeSocket();
+                    }
+                    resolve();
+                });
+            },
         },
         mounted: function () {
             let vm = this;
@@ -136,14 +145,14 @@
                     vm.socket.current.emit('join', vm.roomId);
                     vm.socket.current.on('list', users => {
                         if (users.length > 0) {
-                            vm.peer = vm.createPeer(users[0], vm.socket.current.id);
+                            vm.peer = vm.initializePeer(users[0], vm.socket.current.id);
                         }
                         console.info('list', users);
                     });
 
                     vm.socket.current.on('joined', data => {
                         console.info('joined', data);
-                        vm.peer = vm.addPeer(data.payload, data.user);
+                        vm.peer = vm.setupPeer(data.payload, data.user);
                     });
 
                     vm.socket.current.on('returned', data => {
@@ -168,7 +177,7 @@
                     resolve();
                 });
             },
-            createPeer: function (userToSignal, callerId) {
+            initializePeer: function (userToSignal, callerId) {
                 let vm = this;
                 const peer = new Peer({
                     initiator: true,
@@ -197,7 +206,7 @@
 
                 return peer;
             },
-            addPeer: function (payload, recipient) {
+            setupPeer: function (payload, recipient) {
                 let vm = this;
                 const peer = new Peer({
                     initiator: false,
@@ -218,29 +227,38 @@
                 return peer;
             },
             handleReceivingData: function (data) {
-                let vm = this;
-                console.info('Received Data', data);
-                if (data.toString().includes('done')) {
-                    vm.fileReceived = true;
-                    const parsedData = JSON.parse(data);
-                    vm.fileName.current = parsedData.fileName;
-                } else {
-                    vm.worker.postMessage(data);
-                }
+                return new Promise((resolve) => {
+                    let vm = this;
+                    console.info('Received Data', data);
+                    if (data.toString().includes('done')) {
+                        vm.fileReceived = true;
+                        const parsedData = JSON.parse(data);
+                        vm.fileName.current = parsedData.fileName;
+                    } else {
+                        vm.worker.postMessage(data);
+                    }
+                    resolve();
+                });
             },
             download: function () {
-                let vm = this;
-                vm.fileReceived = false;
-                vm.worker.postMessage('download');
-                vm.worker.addEventListener('message', event => {
-                    const stream = event.data.stream();
-                    const fileStream = streamSaver.createWriteStream(vm.fileName.current);
-                    stream.pipeTo(fileStream);
+                return new Promise((resolve) => {
+                    let vm = this;
+                    vm.fileReceived = false;
+                    vm.worker.postMessage('download');
+                    vm.worker.addEventListener('message', event => {
+                        const stream = event.data.stream();
+                        const fileStream = streamSaver.createWriteStream(vm.fileName.current);
+                        stream.pipeTo(fileStream);
+                    });
+                    resolve();
                 });
             },
             selectFile: function (event) {
-                let vm = this;
-                vm.file = event.target.files[0];
+                return new Promise((resolve) => {
+                    let vm = this;
+                    vm.file = event.target.files[0];
+                    resolve();
+                });
             },
             sendFile: function () {
                 let vm = this;
@@ -255,9 +273,8 @@
 
                 function handleReading(done, value) {
                     if (done) {
-                        peer.write(JSON.stringify({ done: true, fileName: vm.file.name }));
-                        console.info('Done Writing', JSON.stringify({ done: true, fileName: vm.file.name }))
-                        // console.info('done');
+                        peer.send(JSON.stringify({ done: true, fileName: vm.file.name }));
+                        console.info('Done Writing', JSON.stringify({ done: true, fileName: vm.file.name }));
                         return;
                     }
 
@@ -269,27 +286,6 @@
                     });
                 }
             },
-            /*handleReading: function (done, value) {
-                let vm = this;
-                // const peer = vm.peer;
-                if (done) {
-                    try {
-                        vm.peer.write(JSON.stringify({ done: true, fileName: vm.file.name }));
-                        console.info('Done Writing', JSON.stringify({ done: true, fileName: vm.file.name }))
-                    } catch (err) {
-                        console.error("Custom Error", err);
-                    }
-                    
-                    return;
-                }
-
-                console.info('Writing', value);
-                vm.peer.write(value);
-                vm.reader.read().then(obj => {
-                    console.info('2 Handle Reading', obj);
-                    vm.handleReading(obj.done, obj.value);
-                });
-            }*/
         }
     }
 </script>
